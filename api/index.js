@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { clerkClient } = require('@clerk/express');
 const supabase = require('../config/supabase');
+const pusher = require('../config/pusher');
 
 // Router factory function
 module.exports = function () {
@@ -70,11 +71,14 @@ module.exports = function () {
       const { name, description } = req.body;
       const { data: channel, error } = await supabase
         .from('channels')
-        .insert([{ name, description }])
+        .insert([{ name }])
         .select()
         .single();
 
       if (error) throw error;
+
+      // Trigger Pusher event with the new channel
+      await pusher.trigger('global', 'channel:created', { channel });
 
       res.status(201).json({ channel });
     } catch (error) {
@@ -87,7 +91,10 @@ module.exports = function () {
   router.post('/messages', async (req, res) => {
     try {
       const { content, channelId } = req.body;
-      const userId = req.auth.userId; // Get the authenticated user's ID from Clerk
+      const userId = req.auth.userId;
+
+      // Get user details from Clerk
+      const user = await clerkClient.users.getUser(userId);
 
       const { data: message, error } = await supabase
         .from('messages')
@@ -108,12 +115,16 @@ module.exports = function () {
 
       if (error) throw error;
 
+      // Trigger Pusher event with the new message and user details
+      await pusher.trigger(`channel-${channelId}`, 'message:created', {
+        message,
+      });
+
       res.status(201).json({ message });
     } catch (error) {
       console.error('Error creating message:', error);
       res.status(500).json({ error: 'Failed to create message' });
     }
   });
-
   return router;
 };
