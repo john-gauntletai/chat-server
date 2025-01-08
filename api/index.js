@@ -126,5 +126,155 @@ module.exports = function () {
       res.status(500).json({ error: 'Failed to create message' });
     }
   });
+
+  // Add/remove a reaction to a message
+  router.post('/messages/:messageId/reactions', async (req, res) => {
+    try {
+      const { messageId } = req.params;
+      const { emoji } = req.body;
+      const userId = req.auth.userId;
+
+      // First, get the current message
+      const { data: message, error: fetchError } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('id', messageId)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      // Initialize or update reactions array
+      let reactions = message.reactions || [];
+
+      // Find existing reaction with the same emoji
+      const existingReactionIndex = reactions.findIndex(
+        (r) => r.emoji === emoji
+      );
+
+      if (existingReactionIndex >= 0) {
+        // If user has already reacted with this emoji, remove their reaction
+        if (reactions[existingReactionIndex].users.includes(userId)) {
+          reactions[existingReactionIndex].users = reactions[
+            existingReactionIndex
+          ].users.filter((id) => id !== userId);
+
+          // If no users left for this reaction, remove the reaction entirely
+          if (reactions[existingReactionIndex].users.length === 0) {
+            reactions = reactions.filter(
+              (_, index) => index !== existingReactionIndex
+            );
+          }
+        } else {
+          // If user hasn't reacted with this emoji yet, add them
+          reactions[existingReactionIndex].users.push(userId);
+        }
+      } else {
+        // Add new reaction
+        reactions.push({
+          emoji,
+          users: [userId],
+        });
+      }
+
+      // Update the message with new reactions
+      const { data: updatedMessage, error: updateError } = await supabase
+        .from('messages')
+        .update({ reactions })
+        .eq('id', messageId)
+        .select(
+          `
+          *,
+          channels (id, name)
+        `
+        )
+        .single();
+
+      if (updateError) throw updateError;
+
+      // Trigger Pusher event with the updated message
+      await pusher.trigger(
+        `channel-${updatedMessage.channel_id}`,
+        'message:updated',
+        {
+          message: updatedMessage,
+        }
+      );
+
+      res.json({ message: updatedMessage });
+    } catch (error) {
+      console.error('Error updating reaction:', error);
+      res.status(500).json({ error: 'Failed to update reaction' });
+    }
+  });
+
+  // Remove a reaction from a message
+  router.delete('/messages/:messageId/reactions', async (req, res) => {
+    try {
+      const { messageId } = req.params;
+      const { emoji } = req.body;
+      const userId = req.auth.userId;
+
+      // First, get the current message
+      const { data: message, error: fetchError } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('id', messageId)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      // Initialize or update reactions array
+      let reactions = message.reactions || [];
+
+      // Find existing reaction with the same emoji
+      const existingReactionIndex = reactions.findIndex(
+        (r) => r.emoji === emoji
+      );
+
+      if (existingReactionIndex >= 0) {
+        // Remove user from the reaction
+        reactions[existingReactionIndex].users = reactions[
+          existingReactionIndex
+        ].users.filter((id) => id !== userId);
+
+        // If no users left for this reaction, remove the reaction entirely
+        if (reactions[existingReactionIndex].users.length === 0) {
+          reactions = reactions.filter(
+            (_, index) => index !== existingReactionIndex
+          );
+        }
+      }
+
+      // Update the message with new reactions
+      const { data: updatedMessage, error: updateError } = await supabase
+        .from('messages')
+        .update({ reactions })
+        .eq('id', messageId)
+        .select(
+          `
+          *,
+          channels (id, name)
+        `
+        )
+        .single();
+
+      if (updateError) throw updateError;
+
+      // Trigger Pusher event with the updated message
+      await pusher.trigger(
+        `channel-${updatedMessage.channel_id}`,
+        'message:updated',
+        {
+          message: updatedMessage,
+        }
+      );
+
+      res.json({ message: updatedMessage });
+    } catch (error) {
+      console.error('Error removing reaction:', error);
+      res.status(500).json({ error: 'Failed to remove reaction' });
+    }
+  });
+
   return router;
 };
