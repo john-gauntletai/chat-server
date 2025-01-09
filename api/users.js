@@ -21,28 +21,39 @@ module.exports = function () {
     try {
       const userId = req.auth.userId;
 
-      // First get all conversations where the user is a member
-      const { data: conversations, error: conversationsError } = await supabase
+      // First get all conversations where user is a member
+      const { data: userConversations, error: memberError } = await supabase
+        .from('conversation_members')
+        .select('conversation_id')
+        .eq('user_id', userId);
+
+      if (memberError) throw memberError;
+
+      if (!userConversations.length) {
+        return res.json({ conversations: [] });
+      }
+
+      // Then get full conversation details with all members
+      const { data: conversations, error: convError } = await supabase
         .from('conversations')
         .select(
           `
           *,
-          conversation_members!inner (user_id)
+          conversation_members (user_id)
         `
         )
-        .eq('conversation_members.user_id', userId)
-        .order('created_at', { ascending: false });
+        .in(
+          'id',
+          userConversations.map((uc) => uc.conversation_id)
+        )
+        .order('created_at', { ascending: true });
 
-      if (conversationsError) throw conversationsError;
+      if (convError) throw convError;
 
-      res.json({
-        conversations,
-      });
+      res.json({ conversations });
     } catch (error) {
-      console.error('Error fetching user conversations and messages:', error);
-      res
-        .status(500)
-        .json({ error: 'Failed to fetch conversations and messages' });
+      console.error('Error fetching user conversations:', error);
+      res.status(500).json({ error: 'Failed to fetch conversations' });
     }
   });
 

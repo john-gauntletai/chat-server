@@ -99,10 +99,48 @@ module.exports = function () {
   // Add a new conversation
   router.post('/', async (req, res) => {
     try {
-      const { name, is_channel = true, is_public = true } = req.body;
+      const {
+        name,
+        is_channel = true,
+        is_public = true,
+        members = [],
+      } = req.body;
       const userId = req.auth.userId;
 
-      // First create the conversation
+      // For DMs (non-channels), check if conversation already exists with exact members
+      if (!is_channel) {
+        const allMembers = [...members, userId].sort();
+
+        // Get all non-channel conversations
+        const { data: existingConvs, error: fetchError } = await supabase
+          .from('conversations')
+          .select(
+            `
+            *,
+            conversation_members (user_id)
+          `
+          )
+          .eq('is_channel', false);
+
+        if (fetchError) throw fetchError;
+
+        // Find conversation with exact same members
+        const existingConversation = existingConvs?.find((conv) => {
+          const convMembers = conv.conversation_members
+            .map((m) => m.user_id)
+            .sort();
+          return (
+            convMembers.length === allMembers.length &&
+            convMembers.every((id, index) => id === allMembers[index])
+          );
+        });
+
+        if (existingConversation) {
+          return res.json({ conversation: existingConversation });
+        }
+      }
+
+      // If no existing conversation found, create new one
       const { data: conversation, error: createError } = await supabase
         .from('conversations')
         .insert([
@@ -123,7 +161,47 @@ module.exports = function () {
 
       if (createError) throw createError;
 
-      res.status(201).json({ conversation });
+      // Prepare member entries including creator and additional members
+      const memberEntries = [
+        { conversation_id: conversation.id, user_id: userId },
+        ...members.map((memberId) => ({
+          conversation_id: conversation.id,
+          user_id: memberId,
+        })),
+      ];
+
+      // Add all members
+      const { error: memberError } = await supabase
+        .from('conversation_members')
+        .insert(memberEntries);
+
+      if (memberError) throw memberError;
+
+      // Get the updated conversation with all members
+      const { data: updatedConversation, error: fetchError } = await supabase
+        .from('conversations')
+        .select(
+          `
+          *,
+          conversation_members (user_id)
+        `
+        )
+        .eq('id', conversation.id)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      // Notify all members about the new conversation
+      const allMemberIds = [userId, ...members];
+      await Promise.all(
+        allMemberIds.map((memberId) =>
+          pusher.trigger(`user-${memberId}`, 'conversation:created', {
+            conversation: updatedConversation,
+          })
+        )
+      );
+
+      res.status(201).json({ conversation: updatedConversation });
     } catch (error) {
       console.error('Error creating conversation:', error);
       res.status(500).json({ error: 'Failed to create conversation' });
