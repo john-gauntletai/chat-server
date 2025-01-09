@@ -35,10 +35,10 @@ app.get('/session', requireAuth(), async (req, res) => {
   return res.json({ user });
 });
 
-// Add presence channel authentication
+// Add presence conversation authentication
 app.post('/pusher/auth', requireAuth(), async (req, res) => {
   const socketId = req.body.socket_id;
-  const channel = req.body.channel_name;
+  const conversation = req.body.conversation_name;
   const userId = req.auth.userId;
 
   try {
@@ -46,7 +46,7 @@ app.post('/pusher/auth', requireAuth(), async (req, res) => {
     const user = await clerkClient.users.getUser(userId);
 
     // Generate auth response for Pusher
-    const authResponse = pusher.authorizeChannel(socketId, channel, {
+    const authResponse = pusher.authorizeChannel(socketId, conversation, {
       user_id: userId,
       user_info: {
         id: user.id,
