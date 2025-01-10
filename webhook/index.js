@@ -46,11 +46,9 @@ module.exports = () => {
               user_id: sessionUserId,
               status: 'online',
             });
-            console.log('User status updated to online');
             break;
 
           case 'session.ended':
-            console.log('Session ended:', evt.data);
             const endedSessionUserId = evt.data.user_id;
 
             // Update user status to offline
