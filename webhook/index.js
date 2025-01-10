@@ -48,7 +48,7 @@ module.exports = () => {
             });
             break;
 
-          case 'session.ended':
+          case 'session.removed':
             const endedSessionUserId = evt.data.user_id;
 
             // Update user status to offline

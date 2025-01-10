@@ -1,8 +1,43 @@
 const express = require('express');
 const router = express.Router();
 const { clerkClient } = require('@clerk/express');
+const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const supabase = require('../config/supabase');
 const pusher = require('../config/pusher');
+
+const s3Client = new S3Client({
+  region: process.env.AWS_REGION,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  },
+});
+
+// Helper function to add signed URLs to message attachments
+const addSignedUrls = async (messages) => {
+  const messagesArray = Array.isArray(messages) ? messages : [messages];
+
+  for (const message of messagesArray) {
+    if (message.attachments && message.attachments.length > 0) {
+      for (const attachment of message.attachments) {
+        if (attachment.s3Key) {
+          const command = new GetObjectCommand({
+            Bucket: process.env.AWS_S3_BUCKET,
+            Key: attachment.s3Key,
+          });
+
+          // Pre-sign URL for 5 days
+          attachment.url = await getSignedUrl(s3Client, command, {
+            expiresIn: 5 * 24 * 60 * 60,
+          });
+        }
+      }
+    }
+  }
+
+  return Array.isArray(messages) ? messagesArray : messagesArray[0];
+};
 
 // Router factory function
 module.exports = function () {
@@ -29,7 +64,10 @@ module.exports = function () {
 
       if (error) throw error;
 
-      res.json({ messages });
+      // Add signed URLs to attachments
+      const messagesWithUrls = await addSignedUrls(messages);
+
+      res.json({ messages: messagesWithUrls });
     } catch (error) {
       console.error('Error fetching messages:', error);
       res.status(500).json({ error: 'Failed to fetch messages' });
@@ -39,7 +77,8 @@ module.exports = function () {
   // Add a new message
   router.post('/', async (req, res) => {
     try {
-      const { content, conversationId, parentMessageId } = req.body;
+      const { content, conversationId, parentMessageId, attachments } =
+        req.body;
       const userId = req.auth.userId;
 
       // Get user details from Clerk
@@ -54,6 +93,7 @@ module.exports = function () {
             conversation_id: conversationId,
             created_by: userId,
             parent_message_id: parentMessageId || null,
+            attachments: attachments || [],
           },
         ])
         .select(
@@ -66,16 +106,19 @@ module.exports = function () {
 
       if (messageError) throw messageError;
 
-      // Trigger Pusher event with the new message
+      // Add signed URLs to attachments
+      const messageWithUrls = await addSignedUrls(message);
+
+      // Trigger Pusher event with the signed URLs
       await pusher.trigger(
         `conversation-${conversationId}`,
         'message:created',
         {
-          message,
+          message: messageWithUrls,
         }
       );
 
-      res.status(201).json({ message });
+      res.status(201).json({ message: messageWithUrls });
     } catch (error) {
       console.error('Error creating message:', error);
       res.status(500).json({ error: 'Failed to create message' });
@@ -146,16 +189,19 @@ module.exports = function () {
 
       if (updateError) throw updateError;
 
-      // Trigger Pusher event with the updated message
+      // Add signed URLs to attachments
+      const messageWithUrls = await addSignedUrls(updatedMessage);
+
+      // Trigger Pusher event with the signed URLs
       await pusher.trigger(
-        `conversation-${updatedMessage.conversation_id}`,
+        `conversation-${messageWithUrls.conversation_id}`,
         'message:updated',
         {
-          message: updatedMessage,
+          message: messageWithUrls,
         }
       );
 
-      res.json({ message: updatedMessage });
+      res.json({ message: messageWithUrls });
     } catch (error) {
       console.error('Error updating reaction:', error);
       res.status(500).json({ error: 'Failed to update reaction' });

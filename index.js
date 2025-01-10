@@ -29,6 +29,16 @@ app.use(
   })
 );
 
+// Request logging middleware
+app.use((req, res, next) => {
+  const start = Date.now();
+
+  // Log the incoming request
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+
+  next();
+});
+
 app.get('/session', requireAuth(), async (req, res) => {
   const { userId } = req.auth;
   const user = await clerkClient.users.getUser(userId);
@@ -64,6 +74,11 @@ app.post('/pusher/auth', requireAuth(), async (req, res) => {
 });
 
 app.use('/api', requireAuth(), apiRouter());
+
+app.get('/signin', (req, res) => {
+  console.error('unauthorized');
+  res.redirect(process.env.CLIENT_URL + '/signin');
+});
 
 app.get('/', (req, res) => {
   res.json({ message: 'Hello World' });
