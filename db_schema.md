@@ -32,6 +32,14 @@
 | conversation_id | int8        | Foreign key linking to `conversations.id` |
 | user_id         | text        | ID of the user in the conversation        |
 
+### user_statuses
+
+| Column Name | Data Type          | Description                        |
+| ----------- | ------------------ | ---------------------------------- |
+| created_at  | timestamptz        | Timestamp when the member joined   |
+| status      | user_status (ENUM) | the presence of the user           |
+| user_id     | text               | ID of the user in the conversation |
+
 ## Relationships
 
 - `messages.conversation_id` → `cconversation.id` (Many-to-One relationship)

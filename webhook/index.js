@@ -25,6 +25,54 @@ module.exports = () => {
 
       try {
         switch (evt.type) {
+          case 'session.created':
+            const sessionUserId = evt.data.user_id;
+
+            // Update user status to online
+            const { error: onlineError } = await supabase
+              .from('user_statuses')
+              .update({ status: 'online' })
+              .eq('user_id', sessionUserId);
+
+            if (onlineError) {
+              console.error(
+                'Error updating user status to online:',
+                onlineError
+              );
+            }
+
+            // Notify clients about status change
+            await pusher.trigger('presence', 'user:status_changed', {
+              user_id: sessionUserId,
+              status: 'online',
+            });
+            console.log('User status updated to online');
+            break;
+
+          case 'session.ended':
+            console.log('Session ended:', evt.data);
+            const endedSessionUserId = evt.data.user_id;
+
+            // Update user status to offline
+            const { error: offlineError } = await supabase
+              .from('user_statuses')
+              .update({ status: 'offline' })
+              .eq('user_id', endedSessionUserId);
+
+            if (offlineError) {
+              console.error(
+                'Error updating user status to offline:',
+                offlineError
+              );
+            }
+
+            // Notify clients about status change
+            await pusher.trigger('presence', 'user:status_changed', {
+              user_id: endedSessionUserId,
+              status: 'offline',
+            });
+            break;
+
           case 'user.created':
             const {
               id,
@@ -34,6 +82,20 @@ module.exports = () => {
               last_name,
               image_url,
             } = evt.data;
+
+            // Add user status record
+            const { error: statusError } = await supabase
+              .from('user_statuses')
+              .insert([
+                {
+                  user_id: id,
+                  status: 'offline',
+                },
+              ]);
+
+            if (statusError) {
+              console.error('Error creating user status:', statusError);
+            }
 
             // Add user to conversation #1 (general channel)
             const { error: joinError } = await supabase

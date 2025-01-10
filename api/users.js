@@ -57,5 +57,21 @@ module.exports = function () {
     }
   });
 
+  router.get('/statuses', async (req, res) => {
+    try {
+      const { data: statuses, error } = await supabase
+        .from('user_statuses')
+        .select('*')
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+
+      res.json({ statuses });
+    } catch (error) {
+      console.error('Error fetching user statuses:', error);
+      res.status(500).json({ error: 'Failed to fetch user statuses' });
+    }
+  });
+
   return router;
 };
