@@ -13,6 +13,13 @@
 | conversation_id | int8        | Foreign key linking to `conversations.id` |
 | reactions       | jsonb       | JSON object for reactions                 |
 
+### message_replies
+
+| Column Name       | Data Type | Description                          |
+| ----------------- | --------- | ------------------------------------ |
+| message_id        | int8      | Foreign key linking to `messages.id` |
+| parent_message_id | int8      | Foreign key linking to `messages.id` |
+
 ### conversations
 
 | Column Name     | Data Type   | Description                                 |
@@ -42,6 +49,8 @@
 
 ## Relationships
 
-- `messages.conversation_id` → `cconversation.id` (Many-to-One relationship)
+- `message_replies.message_id` → `messages.id` (One-to-One relationship)
+- `message_replies.parent_message_id` → `messages.id` (Many-to-One relationship)
+- `messages.conversation_id` → `conversation.id` (Many-to-One relationship)
 - `conversation_members.conversation_id` → `conversations.id` (Many-to-One relationship)
   """

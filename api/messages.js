@@ -39,13 +39,14 @@ module.exports = function () {
   // Add a new message
   router.post('/', async (req, res) => {
     try {
-      const { content, conversationId } = req.body;
+      const { content, conversationId, parentMessageId } = req.body;
       const userId = req.auth.userId;
 
       // Get user details from Clerk
       const user = await clerkClient.users.getUser(userId);
 
-      const { data: message, error } = await supabase
+      // Start a transaction for creating message and reply relationship
+      const { data: message, error: messageError } = await supabase
         .from('messages')
         .insert([
           {
@@ -62,7 +63,21 @@ module.exports = function () {
         )
         .single();
 
-      if (error) throw error;
+      if (messageError) throw messageError;
+
+      // If this is a reply, create the relationship in message_replies
+      if (parentMessageId) {
+        const { error: replyError } = await supabase
+          .from('message_replies')
+          .insert([
+            {
+              message_id: message.id,
+              parent_message_id: parentMessageId,
+            },
+          ]);
+
+        if (replyError) throw replyError;
+      }
 
       // Trigger Pusher event with the new message
       await pusher.trigger(
