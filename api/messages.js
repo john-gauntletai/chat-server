@@ -53,6 +53,7 @@ module.exports = function () {
             content,
             conversation_id: conversationId,
             created_by: userId,
+            parent_message_id: parentMessageId || null,
           },
         ])
         .select(
@@ -64,20 +65,6 @@ module.exports = function () {
         .single();
 
       if (messageError) throw messageError;
-
-      // If this is a reply, create the relationship in message_replies
-      if (parentMessageId) {
-        const { error: replyError } = await supabase
-          .from('message_replies')
-          .insert([
-            {
-              message_id: message.id,
-              parent_message_id: parentMessageId,
-            },
-          ]);
-
-        if (replyError) throw replyError;
-      }
 
       // Trigger Pusher event with the new message
       await pusher.trigger(
