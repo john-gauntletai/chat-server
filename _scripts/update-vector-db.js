@@ -31,11 +31,10 @@ async function updateVectorStore() {
         )
       `
       )
-      .order('created_at', { ascending: true });
+      .order('created_at', { ascending: true })
       .gt('id', lastMessageId);
 
     if (error) throw error;
-
 
     const messagesWithContent = messages.filter((message) => message.content);
     const messageContentEmbeddings = await embeddings.embedDocuments(
