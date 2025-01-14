@@ -5,6 +5,9 @@ const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const supabase = require('../config/supabase');
 const pusher = require('../config/pusher');
+const { OpenAIEmbeddings } = require('@langchain/openai');
+const { OpenAI } = require('openai');
+const { Pinecone } = require('@pinecone-database/pinecone');
 
 const s3Client = new S3Client({
   region: process.env.AWS_REGION,
@@ -13,6 +16,17 @@ const s3Client = new S3Client({
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
   },
 });
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+const embeddings = new OpenAIEmbeddings({
+  model: 'text-embedding-3-small',
+});
+
+const pinecone = new Pinecone();
+const pineconeIndex = pinecone.Index(process.env.PINECONE_INDEX_TWO);
 
 // Helper function to add signed URLs to message attachments
 const addSignedUrls = async (messages) => {
@@ -122,6 +136,73 @@ module.exports = function () {
     } catch (error) {
       console.error('Error creating message:', error);
       res.status(500).json({ error: 'Failed to create message' });
+    }
+  });
+
+  // Fetch a new AI message
+  router.post('/ai', async (req, res) => {
+    try {
+      const { conversationId, parentMessageId } = req.body;
+      const userId = req.auth.userId;
+
+      // Get the last message from another user in this conversation
+      const { data: lastMessage, error: lastMessageError } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('conversation_id', conversationId)
+        .neq('created_by', userId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (lastMessageError) throw lastMessageError;
+
+      // Create embedding for the last message
+      const queryEmbedding = await embeddings.embedQuery(
+        lastMessage.content || ' '
+      );
+
+      // Query Pinecone for similar messages from the same user
+      const queryResponse = await pineconeIndex.query({
+        vector: queryEmbedding,
+        topK: 5,
+        includeMetadata: true,
+        filter: {
+          userId: userId,
+        },
+      });
+
+      // Extract relevant context from similar messages
+      const relevantContext = queryResponse.matches
+        .map((match) => match.metadata.content)
+        .join('\n');
+      // Generate AI response using context
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4-turbo-preview',
+        messages: [
+          {
+            role: 'system',
+            content: `You are an AI Avatar. These are some previous messages sent by the person you are impersonating. Use this historical context to inform your response. You should try to sound like the person you are impersonating and try to keep your responses under 50 words:\n\n${relevantContext}`,
+          },
+          {
+            role: 'user',
+            content: lastMessage.content,
+          },
+        ],
+      });
+
+      const aiResponse = completion.choices[0].message.content;
+
+      res.json({
+        message: {
+          content: aiResponse,
+          conversation_id: conversationId,
+          parent_message_id: parentMessageId,
+        },
+      });
+    } catch (error) {
+      console.error('Error creating AI message:', error);
+      res.status(500).json({ error: 'Failed to create AI message' });
     }
   });
 

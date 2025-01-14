@@ -73,5 +73,64 @@ module.exports = function () {
     }
   });
 
+  router.get('/me/settings', async (req, res) => {
+    try {
+      const userId = req.auth.userId;
+
+      // Get user settings from database
+      const { data: settings, error } = await supabase
+        .from('user_settings')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+
+      if (error) {
+        console.log(error);
+        // If no settings exist, create default settings
+        if (error.code === 'PGRST116') {
+          const { data: newSettings, error: createError } = await supabase
+            .from('user_settings')
+            .insert([
+              {
+                user_id: userId,
+                use_full_self_chatting: {},
+              },
+            ])
+            .select()
+            .single();
+
+          if (createError) throw createError;
+          return res.json({ settings: newSettings });
+        }
+        throw error;
+      }
+
+      res.json({ settings });
+    } catch (error) {
+      console.error('Error fetching user settings:', error);
+      res.status(500).json({ error: 'Failed to fetch user settings' });
+    }
+  });
+
+  router.put('/me/settings', async (req, res) => {
+    try {
+      const userId = req.auth.userId;
+      const { full_self_chatting } = req.body;
+      const { data: settings, error } = await supabase
+        .from('user_settings')
+        .update({ full_self_chatting })
+        .eq('user_id', userId)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      res.json({ settings });
+    } catch (error) {
+      console.error('Error updating user settings:', error);
+      res.status(500).json({ error: 'Failed to update user settings' });
+    }
+  });
+
   return router;
 };

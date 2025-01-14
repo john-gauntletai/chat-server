@@ -4,15 +4,16 @@
 
 ### messages
 
-| Column Name       | Data Type   | Description                               |
-| ----------------- | ----------- | ----------------------------------------- |
-| id                | int8        | Primary key                               |
-| created_at        | timestamptz | Timestamp when the message was created    |
-| created_by        | text        | Creator of the message                    |
-| content           | text        | Message content                           |
-| conversation_id   | int8        | Foreign key linking to `conversations.id` |
-| reactions         | jsonb       | JSON object for reactions                 |
-| parent_message_id | int8        | Foreign key linking to `messages.id`      |
+| Column Name            | Data Type   | Description                               |
+| ---------------------- | ----------- | ----------------------------------------- |
+| id                     | int8        | Primary key                               |
+| created_at             | timestamptz | Timestamp when the message was created    |
+| created_by             | text        | Creator of the message                    |
+| content                | text        | Message content                           |
+| conversation_id        | int8        | Foreign key linking to `conversations.id` |
+| reactions              | jsonb       | JSON object for reactions                 |
+| parent_message_id      | int8        | Foreign key linking to `messages.id`      |
+| use_full_self_chatting | boolean     | Whether the message is an ai message      |
 
 ### conversations
 
@@ -40,6 +41,14 @@
 | created_at  | timestamptz        | Timestamp when the member joined   |
 | status      | user_status (ENUM) | the presence of the user           |
 | user_id     | text               | ID of the user in the conversation |
+
+### user_settings
+
+| Column Name            | Data Type   | Description                                         |
+| ---------------------- | ----------- | --------------------------------------------------- |
+| created_at             | timestamptz | Timestamp when the member joined                    |
+| use_full_self_chatting | boolean     | Whether the user wants to enable full self chatting |
+| user_id                | text        | ID of the user in the conversation                  |
 
 ## Relationships
 
