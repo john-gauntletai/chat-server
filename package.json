@@ -6,7 +6,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "update-vector-db": "node _scripts/update-vector-db.js"
   },
   "author": "",
   "license": "ISC",
@@ -14,6 +15,9 @@
     "@aws-sdk/client-s3": "^3.726.0",
     "@aws-sdk/s3-request-presigner": "^3.726.0",
     "@clerk/express": "^1.3.31",
+    "@langchain/core": "^0.3.30",
+    "@langchain/openai": "^0.3.17",
+    "@langchain/pinecone": "^0.1.3",
     "@supabase/supabase-js": "^2.x.x",
     "body-parser": "^1.20.3",
     "cors": "^2.8.5",
