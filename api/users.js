@@ -116,14 +116,43 @@ module.exports = function () {
     try {
       const userId = req.auth.userId;
       const { full_self_chatting } = req.body;
-      const { data: settings, error } = await supabase
+
+      // Check if settings exist for user
+      const { data: existingSettings } = await supabase
         .from('user_settings')
-        .update({ full_self_chatting })
+        .select('*')
         .eq('user_id', userId)
-        .select()
         .single();
 
-      if (error) throw error;
+      let settings;
+
+      if (existingSettings) {
+        // Update existing settings
+        const { data, error } = await supabase
+          .from('user_settings')
+          .update({ full_self_chatting })
+          .eq('user_id', userId)
+          .select()
+          .single();
+
+        if (error) throw error;
+        settings = data;
+      } else {
+        // Create new settings
+        const { data, error } = await supabase
+          .from('user_settings')
+          .insert([
+            {
+              user_id: userId,
+              full_self_chatting,
+            },
+          ])
+          .select()
+          .single();
+
+        if (error) throw error;
+        settings = data;
+      }
 
       res.json({ settings });
     } catch (error) {
