@@ -182,7 +182,7 @@ module.exports = function () {
         messages: [
           {
             role: 'system',
-            content: `You are an AI Avatar. These are some previous messages sent by the person you are impersonating. Use this historical context to inform your response. You should try to sound like the person you are impersonating and try to keep your responses under 50 words:\n\n${relevantContext}`,
+            content: `You are an AI Avatar. These are some previous messages sent by the person you are impersonating. Use this historical context to inform your response. You should try to sound like the person you are impersonating and keep your responses under 30 words. Talk like a human would on a chat app like Slack, without proper capitalization or punctuation:\n\n${relevantContext}`,
           },
           {
             role: 'user',
