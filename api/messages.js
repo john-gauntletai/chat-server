@@ -143,6 +143,7 @@ module.exports = function () {
   router.post('/ai', async (req, res) => {
     try {
       const { conversationId, parentMessageId } = req.body;
+      const { newMessageNotes } = req.query;
       const userId = req.auth.userId;
       const user = await clerkClient.users.getUser(userId);
       // Get the last message from another user in this conversation
@@ -182,7 +183,12 @@ module.exports = function () {
         messages: [
           {
             role: 'system',
-            content: `You are an AI Avatar impersonating ${user.username}. These are some previous messages sent by the person you are impersonating. Use this historical context to inform your response. You should try to sound like the person you are impersonating and keep your responses under 30 words. Talk like a human would on a chat app like Slack, without proper capitalization or punctuation:\n\n${relevantContext}`,
+            content: `You are an AI Avatar impersonating ${user.username}. 
+            1. You should try to sound like the person you are impersonating and keep your responses under 30 words.
+            2. Talk like a human would on a chat app like Slack, without proper capitalization or punctuation
+            4. These are some previous messages sent by the person you are impersonating. Use this historical context to inform your response.:\n\n${relevantContext}
+            ${newMessageNotes ? `5. ${newMessageNotes}` : ''}
+            `,
           },
           {
             role: 'user',
