@@ -144,7 +144,7 @@ module.exports = function () {
     try {
       const { conversationId, parentMessageId } = req.body;
       const userId = req.auth.userId;
-
+      const user = await clerkClient.users.getUser(userId);
       // Get the last message from another user in this conversation
       const { data: lastMessage, error: lastMessageError } = await supabase
         .from('messages')
@@ -182,7 +182,7 @@ module.exports = function () {
         messages: [
           {
             role: 'system',
-            content: `You are an AI Avatar. These are some previous messages sent by the person you are impersonating. Use this historical context to inform your response. You should try to sound like the person you are impersonating and keep your responses under 30 words. Talk like a human would on a chat app like Slack, without proper capitalization or punctuation:\n\n${relevantContext}`,
+            content: `You are an AI Avatar impersonating ${user.username}. These are some previous messages sent by the person you are impersonating. Use this historical context to inform your response. You should try to sound like the person you are impersonating and keep your responses under 30 words. Talk like a human would on a chat app like Slack, without proper capitalization or punctuation:\n\n${relevantContext}`,
           },
           {
             role: 'user',
@@ -286,6 +286,44 @@ module.exports = function () {
     } catch (error) {
       console.error('Error updating reaction:', error);
       res.status(500).json({ error: 'Failed to update reaction' });
+    }
+  });
+
+  // Add this new route in your messages.js router
+  router.post('/test', async (req, res) => {
+    try {
+      const { conversationId, userId, content } = req.body;
+
+      const { data: message, error } = await supabase
+        .from('messages')
+        .insert([
+          {
+            content,
+            conversation_id: conversationId,
+            created_by: userId,
+          },
+        ])
+        .select('*, conversations(id, name)')
+        .single();
+
+      if (error) throw error;
+
+      // Add signed URLs to attachments if needed
+      const messageWithUrls = await addSignedUrls(message);
+
+      // Trigger Pusher event
+      await pusher.trigger(
+        `conversation-${conversationId}`,
+        'message:created',
+        {
+          message: messageWithUrls,
+        }
+      );
+
+      res.json({ message: messageWithUrls });
+    } catch (error) {
+      console.error('Error creating test message:', error);
+      res.status(500).json({ error: 'Failed to create test message' });
     }
   });
 
